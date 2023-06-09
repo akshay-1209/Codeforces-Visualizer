@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+
+      body{
+        background-color: grey;
+      }
+
+      #userInfo {
+        text-align: center;
+        margin: 20px;
+        padding: 20px;
+        background-color: #f2f2f2;
+        border-radius: 10px;
+        box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      }
+      
+      #name {
+        font-size: 24px;
+        color: #333;
+        margin-bottom: 10px;
+      }
+      
+      p {
+        margin: 5px;
+        font-size: 18px;
+        color: #666;
+      }
+
+      .container {
+        display: none;
+        justify-content: center;
+        flex-direction: column;
+      }
+
+      .box {
+        margin: 10px;
+        padding: 20px;
+        background-color: #f0f0f0;
+      }
+
+    </style>
+
+
+  </head>
+
+  <body>
+    <div style="display: flex; justify-content: center;">
+      <form id="myForm">
+          <input id = "handle" type="text" placeholder="Enter your codeforces id" style="display: inline;">
+          <button type="submit" style="display: inline;">Submit</button>
+      </form>
+    </div>
+    
+    <div class="container" id="charts">
+    <div id="userInfo">
+      <h1 id="name"></h1>
+      <p id="maxRating"></p>
+      <p id="currentRating"></p>
+      <p id="maxRank"></p>
+      <p id="currentRank"></p>
+    </div>
+    
+
+
+      <div id = 'line_chart' class = "box"></div>
+      <div id = 'column_chart' class = "box"></div>
+      <div id = 'donut_chart' class = "box"></div>
+    </div>
+    
+
+
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script>
+      google.charts.load('current', {'packages':['corechart']});
+
+      let problems = {};
+      let problem_ratings = {};
+      let tags = {};
+
+      async function getUserInfo(handle) {
+        let response = await fetch(`https://codeforces.com/api/user.info?handles=${handle}`);
+        let data = await response.json();
+        return data;
+      }
+
+      async function getUserRating(handle) {
+        let response = await fetch(`https://codeforces.com/api/user.rating?handle=${handle}`);
+        let data = await response.json();
+        return data;
+      }
+
+      async function getSubmissionInfo(handle){
+        let response = await fetch(`https://codeforces.com/api/user.status?handle=${handle}`);
+        let data = await response.json();
+        return data;
+      }
+
+      async function getTagsInfo(handle){
+        let response = await fetch(`https://codeforces.com/api/user.status?handle=${handle}`);
+        let data = await response.json();
+        return data;
+      }
+
+      function display_info(result){
+        console.log(result);
+        document.getElementById('name').innerText = result['firstName'] + " " + result['lastName'];
+        document.getElementById('maxRating').innerText = "Max Rating: "  + result['maxRating'];
+        document.getElementById('currentRating').innerText = "Current Rating: "  + result['rating'];
+        document.getElementById('maxRank').innerText = "Max Rank: "  + result['maxRank'];
+        document.getElementById('currentRank').innerText = "Current Rank: "  + result['rank'];
+      }
+
+      function display_rating_chart(result){
+        console.log(result);
+        let matrix = [['Contest Number','Rating']];
+        for(let i=0;i<result.length;i++){
+          matrix.push([i,result[i]['newRating']]);
+        }
+        matrix = google.visualization.arrayToDataTable(matrix);
+
+        let options = {'title':'Rating graph',
+                        'width':1200,
+                        'height':500};
+        let line_chart = new google.visualization.LineChart(document.getElementById('line_chart'));
+        line_chart.draw(matrix,options);
+      }
+
+      function display_submissions_info(result){
+        for(let i=0;i<result.length;i++){
+          problems[result[i]['problem']['name']] = result[i]['problem']['rating'];
+        }
+
+        for(let key in problems){
+          let rate = problems[key];
+
+          if(problem_ratings.hasOwnProperty(rate)) 
+            problem_ratings[rate] += 1;
+          else 
+            problem_ratings[rate] = 1;
+        }
+        
+        let matrix = [['Rating Range','Frequency']];
+        for(let key in problem_ratings){
+          matrix.push([key,problem_ratings[key]]);
+        }
+
+        let options = {'title':'Problem Rating',
+                        'width':1200,
+                        'height':500};
+
+        matrix = google.visualization.arrayToDataTable(matrix);
+        let column_chart = new google.visualization.ColumnChart(document.getElementById('column_chart'));
+        column_chart.draw(matrix,options);
+      }
+
+      function display_donut_chart(result){
+
+        let seen_problems = {};
+        console.log(result);
+        for(let i=0;i<result.length;i++){
+          let temp = result[i]['problem']['tags'];
+          if(seen_problems.hasOwnProperty(result[i]['problem']['name'])) continue;
+
+          for(let j=0;j<temp.length;j++){
+            if(tags.hasOwnProperty(temp[j]))
+              tags[result[i]['problem']['tags'][j]] += 1;
+            else 
+              tags[result[i]['problem']['tags'][j]] = 1;
+          }
+
+          seen_problems[result[i]['problem']['name']] = 1;
+        }
+        console.log(tags);
+        let matrix = [['Tags','Frequency']];
+        for(let key in tags){
+          matrix.push([key,tags[key]]);
+        }
+
+        let options = {'title':'Problem Tags',
+                        'pieHole':0.4,
+                        'pieSliceText':'none',
+                        'width':1200,
+                        'height':500};
+
+        matrix = google.visualization.arrayToDataTable(matrix);
+        // console.log(matrix);
+        let donut_chart = new google.visualization.PieChart(document.getElementById('donut_chart'));
+        donut_chart.draw(matrix,options);
+      }
+
+      function display(){
+        let handle = document.getElementById('handle').value;
+        getUserInfo(handle).then(data =>
+          display_info(data['result'][0])
+        );
+
+        getUserRating(handle).then(data =>
+          display_rating_chart(data['result'])
+        );
+
+        getSubmissionInfo(handle).then(data =>
+          display_submissions_info(data['result'])
+        );
+
+        getTagsInfo(handle).then(data =>
+          display_donut_chart(data['result'])
+        );
+      }
+
+      const myForm = document.getElementById("myForm");
+      myForm.addEventListener("submit",function(event){
+        event.preventDefault();
+        document.getElementById("charts").style.display = "flex";
+        display();
+        document.getElementById("handle").value = "";
+      })
+
+    </script>
+    
+  </body>
+</html>
